@@ -42,7 +42,7 @@ class Menu:
         
         # Position de départ pour centrer horizontalement
         start_x = (self.screen.get_width() - total_width) // 2
-        y_pos = 60  # Position verticale du titre (un peu plus haut pour la police plus grande)
+        y_pos = 100  # Position verticale du titre descendue plus bas
         
         # Dessiner chaque lettre
         current_x = start_x

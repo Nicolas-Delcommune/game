@@ -25,33 +25,27 @@ def draw_piece_outline(screen, piece_surface, x, y, color, thickness=2):
                 pygame.draw.polygon(screen, color, offset_points, 1)
 
 def create_wood_texture(width, height):
-    """Crée une surface avec une texture bois simulée"""
-    wood_surface = pygame.Surface((width, height))
+    """Crée une surface avec un fond sobre et lisse"""
+    background_surface = pygame.Surface((width, height))
     
-    # Couleurs de base du bois
-    base_color = (139, 90, 43)  # Marron bois
-    dark_color = (101, 67, 33)  # Marron foncé
-    light_color = (160, 110, 60)  # Marron clair
+    # Couleur de fond sobre - gris bleu très doux
+    base_color = (45, 50, 55)  # Gris bleu foncé mais doux
     
-    # Remplir avec la couleur de base
-    wood_surface.fill(base_color)
+    # Créer un léger dégradé vertical pour plus de profondeur
+    for y in range(height):
+        # Variation très subtile de luminosité du haut vers le bas
+        gradient_factor = y / height  # De 0 à 1
+        brightness_variation = int(10 * gradient_factor)  # Variation très légère
+        
+        color = (
+            min(255, base_color[0] + brightness_variation),
+            min(255, base_color[1] + brightness_variation),
+            min(255, base_color[2] + brightness_variation)
+        )
+        
+        pygame.draw.line(background_surface, color, (0, y), (width, y))
     
-    # Ajouter des lignes horizontales pour simuler le grain du bois
-    for y in range(0, height, 3):
-        color_variation = random.randint(-20, 20)
-        line_color = tuple(max(0, min(255, c + color_variation)) for c in base_color)
-        pygame.draw.line(wood_surface, line_color, (0, y), (width, y))
-    
-    # Ajouter quelques veines plus prononcées
-    for _ in range(height // 20):
-        y = random.randint(0, height)
-        vein_color = dark_color if random.choice([True, False]) else light_color
-        thickness = random.randint(1, 3)
-        for i in range(thickness):
-            if y + i < height:
-                pygame.draw.line(wood_surface, vein_color, (0, y + i), (width, y + i))
-    
-    return wood_surface
+    return background_surface
 
 def generate_puzzle_connections(grid_size):
     """Génère une carte des connexions entre pièces adjacentes"""
@@ -145,88 +139,174 @@ def create_puzzle_piece_mask(extended_width, extended_height, base_width, base_h
     
     return mask
 
-def celebration_animation(screen, tiles, grid_size, puzzle_area, difficulty_name="", solve_type=""):
+def celebration_animation(screen, original_image, grid_size, puzzle_area, difficulty_name=""):
     """Animation de célébration quand le puzzle est résolu"""
     font = pygame.font.SysFont(None, 48)
     clock = pygame.time.Clock()
     
     frame = 0
-    waiting_for_input = False
     
-    while frame < 180 or waiting_for_input:  # 3 secondes + attente
-        if frame < 120:
-            # Phase 1: Animation des pièces qui brillent
-            screen.fill((40, 40, 40))  # Fond gris foncé
+    # Utiliser l'image originale redimensionnée pour l'animation
+    puzzle_x, puzzle_y, puzzle_width, puzzle_height = puzzle_area
+    final_image = pygame.transform.scale(original_image, (puzzle_width, puzzle_height))
+    
+    # Animation continue jusqu'à ce qu'une touche soit pressée ou un clic de souris
+    while True:
+        # Affichage stable sans clignotement
+        screen.fill((40, 40, 40))  # Fond gris foncé
+        
+        # Dessiner le cadre du puzzle
+        pygame.draw.rect(screen, (200, 200, 200), (puzzle_x-2, puzzle_y-2, puzzle_width+4, puzzle_height+4), 2)
+        
+        # Afficher l'image complète
+        screen.blit(final_image, (puzzle_x, puzzle_y))
+        
+        # Contour vert fixe (sans clignotement)
+        green_color = (0, 255, 0)  # Vert pur
+        pygame.draw.rect(screen, green_color, (puzzle_x-6, puzzle_y-6, puzzle_width+12, puzzle_height+12), 6)
+        
+        # Message de succès en vert
+        success_msg = font.render("Puzzle Résolu !", True, (0, 255, 0))
+        success_rect = success_msg.get_rect(center=(screen.get_width() // 2, 50))
+        screen.blit(success_msg, success_rect)
+        
+        # Message pour continuer - fixe aussi
+        continue_msg = pygame.font.Font(None, 32).render("Appuyez sur une touche ou cliquez pour continuer...", True, (200, 200, 200))
+        continue_rect = continue_msg.get_rect(center=(screen.get_width() // 2, screen.get_height() - 50))
+        screen.blit(continue_msg, continue_rect)
+        
+        # Vérifier les événements
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return
+            elif event.type == pygame.KEYDOWN:
+                return  # Sortir dès qu'une touche est pressée
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                return  # Sortir dès qu'un clic de souris est détecté
+        
+        pygame.display.flip()
+        clock.tick(60)
+        frame += 1
+
+def abandon_animation(screen, pieces, puzzle_pieces, background_texture, puzzle_area, grid_size, difficulty_name=""):
+    """Animation d'abandon qui place automatiquement toutes les pièces à leur position correcte"""
+    clock = pygame.time.Clock()
+    
+    # Ajuster la vitesse selon la difficulté
+    if difficulty_name == "Impossible":
+        animation_duration = 15  # Ultra rapide - 0.25 seconde
+        delay_between_pieces = 1  # Presque simultané
+    elif difficulty_name == "Difficile":
+        animation_duration = 25  # Très rapide - 0.42 seconde
+        delay_between_pieces = 1  # Presque simultané
+    elif difficulty_name == "Moyen":
+        animation_duration = 40  # Rapide - 0.67 seconde
+        delay_between_pieces = 2  # Décalage minimal
+    else:  # Facile ou par défaut
+        animation_duration = 60  # Normal - 1 seconde
+        delay_between_pieces = 3  # Décalage normal
+    
+    # Calculer les positions finales de toutes les pièces
+    puzzle_x, puzzle_y, puzzle_width, puzzle_height = puzzle_area
+    tile_width = puzzle_width // grid_size
+    tile_height = puzzle_height // grid_size
+    
+    # Créer une liste des pièces non placées à animer
+    pieces_to_move = []
+    for piece in pieces:
+        if not piece['placed']:
+            # Position actuelle
+            start_x, start_y = piece['x'], piece['y']
             
-            # Dessiner le cadre du puzzle
-            puzzle_x, puzzle_y, puzzle_width, puzzle_height = puzzle_area
-            pygame.draw.rect(screen, (200, 200, 200), (puzzle_x-2, puzzle_y-2, puzzle_width+4, puzzle_height+4), 2)
+            # Position finale
+            target_row = piece['index'] // grid_size
+            target_col = piece['index'] % grid_size
+            padding = piece['padding']
+            end_x = puzzle_x + target_col * tile_width - padding
+            end_y = puzzle_y + target_row * tile_height - padding
             
-            # Calculer la taille des pièces
-            tile_width = puzzle_width // grid_size
-            tile_height = puzzle_height // grid_size
-            
-            # Afficher toutes les pièces avec effet de brillance
-            for i, tile in enumerate(tiles):
-                row = i // grid_size
-                col = i % grid_size
-                x = puzzle_x + col * tile_width
-                y = puzzle_y + row * tile_height
+            pieces_to_move.append({
+                'piece': piece,
+                'start_x': start_x,
+                'start_y': start_y,
+                'end_x': end_x,
+                'end_y': end_y,
+                'delay': len(pieces_to_move) * delay_between_pieces
+            })
+    
+    frame = 0
+    animation_finished = False
+    
+    while True:
+        # Phase d'animation
+        if not animation_finished:
+            if frame >= animation_duration + max([p['delay'] for p in pieces_to_move] if pieces_to_move else [0]):
+                animation_finished = True
+                # S'assurer que toutes les pièces sont marquées comme placées
+                for piece in pieces:
+                    piece['placed'] = True
+        
+        # Dessiner le fond
+        screen.blit(background_texture, (0, 0))
+        
+        # Dessiner la zone du puzzle
+        pygame.draw.rect(screen, (200, 200, 200), puzzle_area)
+        
+        # Dessiner la grille
+        for i in range(grid_size + 1):
+            x = puzzle_x + i * tile_width
+            pygame.draw.line(screen, (150, 150, 150), (x, puzzle_y), (x, puzzle_y + puzzle_height))
+        for i in range(grid_size + 1):
+            y = puzzle_y + i * tile_height
+            pygame.draw.line(screen, (150, 150, 150), (puzzle_x, y), (puzzle_x + puzzle_width, y))
+        
+        # Animer les pièces non placées vers leur position finale
+        if not animation_finished:
+            for piece_data in pieces_to_move:
+                piece = piece_data['piece']
                 
-                # Effet de brillance aléatoire
-                if random.randint(0, 10) < 3:
-                    difficulty_color = get_difficulty_color(difficulty_name) if difficulty_name else (255, 215, 0)
-                    pygame.draw.rect(screen, difficulty_color, (x-2, y-2, tile_width+4, tile_height+4), 3)
-                
-                screen.blit(pygame.transform.scale(tile, (tile_width, tile_height)), (x, y))
+                # Vérifier si cette pièce doit commencer son animation
+                if frame >= piece_data['delay']:
+                    animation_progress = min(1.0, (frame - piece_data['delay']) / animation_duration)
+                    
+                    # Pour les niveaux difficiles, utiliser une interpolation plus directe
+                    if difficulty_name in ["Impossible", "Difficile"]:
+                        # Interpolation linéaire pour plus de rapidité
+                        eased_t = animation_progress
+                    else:
+                        # Interpolation avec easing (plus naturel) pour facile/moyen
+                        t = animation_progress
+                        eased_t = t * t * (3.0 - 2.0 * t)  # Smooth step function
+                    
+                    # Position interpolée
+                    current_x = piece_data['start_x'] + (piece_data['end_x'] - piece_data['start_x']) * eased_t
+                    current_y = piece_data['start_y'] + (piece_data['end_y'] - piece_data['start_y']) * eased_t
+                    
+                    # Mettre à jour la position de la pièce
+                    piece['x'] = current_x
+                    piece['y'] = current_y
+                    
+                    # Si l'animation est terminée, marquer la pièce comme placée
+                    if animation_progress >= 1.0:
+                        piece['placed'] = True
+                        piece['x'] = piece_data['end_x']
+                        piece['y'] = piece_data['end_y']
+        
+        # Dessiner toutes les pièces (placées et en cours d'animation)
+        for piece in pieces:
+            tile = puzzle_pieces[piece['index']]
+            screen.blit(tile, (piece['x'], piece['y']))
+        
+        # Si l'animation est terminée, afficher le message et attendre l'interaction
+        if animation_finished:
+            # Message d'abandon
+            font = pygame.font.SysFont(None, 48)
+            abandon_msg = font.render("Puzzle Abandonné", True, (255, 100, 100))  # Rouge-orange
+            abandon_rect = abandon_msg.get_rect(center=(screen.get_width() // 2, 50))
+            screen.blit(abandon_msg, abandon_rect)
             
-            # Message de succès
-            success_msg = font.render("Puzzle Résolu !", True, get_difficulty_color(difficulty_name) if difficulty_name else (0, 255, 0))
-            success_rect = success_msg.get_rect(center=(screen.get_width() // 2, 50))
-            screen.blit(success_msg, success_rect)
-            
-        elif frame < 180:
-            # Phase 2: Message de félicitations stable
-            screen.fill((40, 40, 40))
-            
-            # Dessiner le puzzle complet
-            puzzle_x, puzzle_y, puzzle_width, puzzle_height = puzzle_area
-            pygame.draw.rect(screen, (200, 200, 200), (puzzle_x-2, puzzle_y-2, puzzle_width+4, puzzle_height+4), 2)
-            
-            tile_width = puzzle_width // grid_size
-            tile_height = puzzle_height // grid_size
-            
-            for i, tile in enumerate(tiles):
-                row = i // grid_size
-                col = i % grid_size
-                x = puzzle_x + col * tile_width
-                y = puzzle_y + row * tile_height
-                screen.blit(pygame.transform.scale(tile, (tile_width, tile_height)), (x, y))
-            
-            success_msg = font.render("Félicitations !", True, get_difficulty_color(difficulty_name) if difficulty_name else (0, 255, 0))
-            success_rect = success_msg.get_rect(center=(screen.get_width() // 2, 50))
-            screen.blit(success_msg, success_rect)
-            
-        else:
-            # Phase 3: Attendre l'input de l'utilisateur
-            waiting_for_input = True
-            screen.fill((40, 40, 40))
-            
-            # Dessiner le puzzle final
-            puzzle_x, puzzle_y, puzzle_width, puzzle_height = puzzle_area
-            pygame.draw.rect(screen, (200, 200, 200), (puzzle_x-2, puzzle_y-2, puzzle_width+4, puzzle_height+4), 2)
-            
-            tile_width = puzzle_width // grid_size
-            tile_height = puzzle_height // grid_size
-            
-            for i, tile in enumerate(tiles):
-                row = i // grid_size
-                col = i % grid_size
-                x = puzzle_x + col * tile_width
-                y = puzzle_y + row * tile_height
-                screen.blit(pygame.transform.scale(tile, (tile_width, tile_height)), (x, y))
-            
-            continue_msg = pygame.font.Font(None, 32).render("Appuyez sur une touche pour continuer...", True, (200, 200, 200))
+            # Message pour continuer
+            continue_msg = pygame.font.Font(None, 32).render("Appuyez sur une touche ou cliquez pour continuer...", True, (200, 200, 200))
             continue_rect = continue_msg.get_rect(center=(screen.get_width() // 2, screen.get_height() - 50))
             screen.blit(continue_msg, continue_rect)
         
@@ -234,8 +314,8 @@ def celebration_animation(screen, tiles, grid_size, puzzle_area, difficulty_name
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return
-            elif event.type == pygame.KEYDOWN and waiting_for_input:
-                return
+            elif animation_finished and (event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN):
+                return  # Sortir seulement après l'animation ET une interaction utilisateur
         
         pygame.display.flip()
         clock.tick(60)
@@ -411,15 +491,15 @@ def game_loop(screen, image_path, grid_size, difficulty_name=None, level_index=N
     # Couleur de la difficulté pour les effets visuels
     difficulty_color = get_difficulty_color(difficulty_name) if difficulty_name else (100, 149, 237)
     
-    # Créer la texture bois pour tout l'arrière-plan
-    wood_texture = create_wood_texture(SCREEN_WIDTH, SCREEN_HEIGHT)
+    # Créer le fond sobre pour tout l'arrière-plan
+    background_texture = create_wood_texture(SCREEN_WIDTH, SCREEN_HEIGHT)
     
     while True:
         # Couleur de fond selon la difficulté mais complètement remplacée par le bois
         bg_color = tuple(min(255, c + 20) for c in difficulty_color) if difficulty_name else (40, 40, 40)
         
-        # Dessiner la texture bois sur tout l'arrière-plan
-        screen.blit(wood_texture, (0, 0))
+        # Dessiner le fond sobre sur tout l'arrière-plan
+        screen.blit(background_texture, (0, 0))
         
         # Zone centrale (plateau de puzzle) - fond gris clair avec grille
         puzzle_area = (PUZZLE_X, PUZZLE_Y, puzzle_image_width, puzzle_image_height)
@@ -593,7 +673,7 @@ def game_loop(screen, image_path, grid_size, difficulty_name=None, level_index=N
                     mark_level_completed(difficulty_name, level_index, final_time)
                 
                 # Lancer l'animation de célébration
-                celebration_animation(screen, puzzle_pieces, grid_size, puzzle_area, difficulty_name)
+                celebration_animation(screen, original_image, grid_size, puzzle_area, difficulty_name)
                 return "menu"
         
         # Traiter la demande de pause APRÈS avoir tout dessiné
@@ -611,6 +691,8 @@ def game_loop(screen, image_path, grid_size, difficulty_name=None, level_index=N
             elif pause_action == "quit":
                 return "quit"
             elif pause_action == "abandon":
+                # Lancer l'animation d'abandon qui place toutes les pièces automatiquement
+                abandon_animation(screen, pieces, puzzle_pieces, background_texture, puzzle_area, grid_size, difficulty_name)
                 return "menu"
         
         pygame.display.flip()

@@ -33,7 +33,7 @@ BUTTON_RADIUS = 12  # coins arrondis
 # Polices
 FONT_PATH = None  # ou "assets/fonts/Roboto-Regular.ttf"
 FONT_SIZE = 32
-TITLE_FONT_SIZE = 64  # Plus grande taille pour les titres
+TITLE_FONT_SIZE = 104  # Taille encore plus grande pour les titres
 
 # Logo
 _logo_cache = None
